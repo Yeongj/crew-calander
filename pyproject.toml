@@ -1,0 +1,15 @@
+[project]
+name = "crew-calander"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "numpy>=2.0.0",
+    "pillow>=10.0.0",
+    "scikit-image>=0.20.0",
+    "rapidocr>=1.4.4",
+    "rapidocr-onnxruntime>=1.4.4",
+    "streamlit>=1.58.0",
+    "python-dotenv>=1.2.2",
+]
