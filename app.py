@@ -2,6 +2,7 @@ import streamlit as st
 import io
 from PIL import Image
 import numpy as np
+from datetime import datetime
 from process_image import (
     ocr_read_image,
     find_month_year_block_and_parse_month_year,
@@ -10,52 +11,35 @@ from process_image import (
     find_calendar_blocks,
     crop_from_image_each_cell_and_ocr
 )
+from get_flight_info import check_and_fetch_flight_info, get_flight_info, parse_flight_info_and_store
+from apscheduler.schedulers.background import BackgroundScheduler
 
-# # Multi language support
-# # 1. Define translations for your UI elements
-# TRANSLATIONS = {
-#     "English": {
-#         "page_title": "Crew Roster Parser",
-#         "file_uploader": "Choose a roster screenshot...",
-#         "button": "Fetch Data",
-#         "spinner": "Processing data, please wait...",
-#         "success": "Data loaded successfully!",
-#         "label": "Choose Language"
-#     },
-#     "中文": {
-#         "page_title": "Crew Roster Parser",
-#         "file_uploader": "中Choose a roster screenshot...",
-#         "button": "Fetch Data123123",
-#         "spinner": "Procesqweqwsing data, please wait...",
-#         "success": "Data loaded successfully!",
-#         "label": "Choose Language"
-#     }
-# }
-# DEFAULT_LANG = "中文"
+@st.cache_resource
+def start_monthly_scheduler():
+    def monthly_job():
+        try:
+            today = datetime.now()
+            print(f"[Scheduler Job] Starting monthly flight data update at {today}")
+            flight_data, total_records, year, month = get_flight_info()
+            if flight_data:
+                parse_flight_info_and_store(flight_data, year, month)
+                print(f"[Scheduler Job] Successfully stored {total_records} flights for {month}/{year}.")
+        except Exception as e:
+            print(f"[Scheduler Job] Error in monthly job: {e}")
 
-# # 2. Initialize default language state
-# if "current_lang" not in st.session_state:
-#     st.session_state["current_lang"] = DEFAULT_LANG
+    scheduler = BackgroundScheduler()
+    # Run at 10:00 AM on the 27th day of every month
+    scheduler.add_job(monthly_job, 'cron', day=27, hour=10, minute=0)
+    scheduler.start()
+    print("[Scheduler] Started APScheduler background monthly job (on the 27th at 10:00 AM).")
+    return scheduler
 
-# # 3. Callback function to trigger on selection
-# def update_language():
-#     st.session_state["current_lang"] = st.session_state["lang_control"]
+# Start background monthly scheduler
+start_monthly_scheduler()
 
-# # 4. Horizontal Segmented Control Widget
-# st.segmented_control(
-#     label="Language Selection",
-#     options=list(TRANSLATIONS.keys()),
-#     default=st.session_state["current_lang"],
-#     key="lang_control",
-#     on_change=update_language,
-#     label_visibility="collapsed"  # Hides label for a cleaner UI look
-# )
-
-# # 5. Load strings based on active state
-# lang = TRANSLATIONS[st.session_state["current_lang"]]
-
-# st.divider()
-# ####
+# Check and fetch this month's flight schedule table on startup
+current_date = datetime.now()
+check_and_fetch_flight_info(current_date.year, current_date.month)
 
 st.set_page_config(page_title="Crew Roster Parser", page_icon="✈️")
 

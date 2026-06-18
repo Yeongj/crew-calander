@@ -82,7 +82,7 @@ curl --request GET \
      --url TDX_API_URI /v2/Air/GeneralSchedule/International \
      --header 'authorization: Bearer ACCESS_TOKEN'
 '''
-def get_flight_info():
+def get_flight_info(year=None, month=None):
     access_token = get_access_token()
     if not access_token:
         return None, 0, None, None
@@ -95,10 +95,23 @@ def get_flight_info():
     }
 
     all_flight_data = []
-    top = os.getenv("API_DATA_BATCH_SIZE")
+    top_env = os.getenv("API_DATA_BATCH_SIZE")
+    top = int(top_env) if top_env else 1000
     skip = 0
 
-    start_date_filter, end_date_filter = get_next_month_start_end_dates()
+    if year is not None and month is not None:
+        start_date = datetime(year, month, 1)
+        if month == 12:
+            end_date = datetime(year + 1, 1, 1)
+        else:
+            end_date = datetime(year, month + 1, 1)
+        start_date_filter = start_date.strftime("%Y-%m-%dT00:00:00+08:00")
+        end_date_filter = end_date.strftime("%Y-%m-%dT00:00:00+08:00")
+        target_year, target_month = year, month
+    else:
+        start_date_filter, end_date_filter = get_next_month_start_end_dates()
+        dt = datetime.strptime(start_date_filter.split('T')[0], "%Y-%m-%d")
+        target_year, target_month = dt.year, dt.month
 
     while True:
         params = {
@@ -142,7 +155,8 @@ Each entry from the API represents a schedule for a period, so this function exp
 those schedules into concrete daily flight records.
 '''
 def parse_flight_info_and_store(flight_data, year, month):
-    conn = sqlite3.connect("./flight_info.db")
+    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flight_info.db")
+    conn = sqlite3.connect(db_path)
     cursor = conn.cursor()
 
     table_name = f"flight_schedules_{year}_{month:02d}"
@@ -194,6 +208,31 @@ def parse_flight_info_and_store(flight_data, year, month):
             current_date += timedelta(days=1)
     conn.commit()
     conn.close()
+
+def check_and_fetch_flight_info(year, month):
+    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flight_info.db")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    table_name = f"flight_schedules_{year}_{month:02d}"
+
+    # Check if table exists
+    cursor.execute("SELECT name FROM sqlite_master WHERE type='table' AND name=?", (table_name,))
+    table_exists = cursor.fetchone() is not None
+    conn.close()
+
+    if not table_exists:
+        print(f"Table {table_name} does not exist. Fetching data from API...")
+        flight_data, total_records, y, m = get_flight_info(year, month)
+        if flight_data:
+            parse_flight_info_and_store(flight_data, y, m)
+            print(f"Successfully stored {total_records} flights for {y}-{m:02d}.")
+            return True
+        else:
+            print("Failed to fetch flight info from API.")
+            return False
+    else:
+        print(f"Table {table_name} already exists.")
+        return True
 
 if __name__ == "__main__":
     # flight_data, total_records, year, month = get_flight_info()
