@@ -9,7 +9,8 @@ from process_image import (
     find_calandar_bottom,
     find_largest_contour_and_crop,
     find_calendar_blocks,
-    crop_from_image_each_cell_and_ocr
+    crop_from_image_each_cell_and_ocr,
+    parse_roster_cells
 )
 from get_flight_info import check_and_fetch_flight_info, get_flight_info, parse_flight_info_and_store
 from apscheduler.schedulers.background import BackgroundScheduler
@@ -93,10 +94,9 @@ if uploaded_file is not None:
                 # 6. Extract content for each grid cell
                 grid_content = crop_from_image_each_cell_and_ocr(table_img, calendar_grid)
 
-                # st.subheader("Extracted Content Preview")
-                # # Preview non-empty items extracted from the grid
-                # flat_content = [item for row in grid_content for cell in row for item in cell if item]
-                # st.write(flat_content)
+                parsed_roster = parse_roster_cells(grid_content, top.get('year'), top.get('month'))
+                st.subheader("Parsed Roster Details")
+                st.write(parsed_roster)
 
                 # Convert PIL image to bytes for download
                 buf = io.BytesIO()

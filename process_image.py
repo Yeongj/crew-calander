@@ -3,6 +3,7 @@ import numpy as np
 from skimage import measure, filters, morphology, transform, feature
 from PIL import Image, ImageDraw
 from rapidocr import EngineType, LangDet, LangRec, ModelType, OCRVersion, RapidOCR
+from datetime import datetime
 
 # ========= CONFIG =========
 
@@ -205,7 +206,6 @@ def find_largest_contour_and_crop(img):
 
     return cropped_obj
 
-
 def find_calendar_blocks(img):
     """Detects calendar grid lines using Canny edge detection, Hough transform,
     and anchor-based grid reconstruction.
@@ -359,6 +359,92 @@ def find_calendar_blocks(img):
 
     return output, calendar_grid
 
+def parse_roster_cells(cells_data, year=None, month=None):
+    parsed = []
+    # If the input is a 2D grid (list of rows containing lists of cells), flatten it
+    flat_cells = []
+    for item in cells_data:
+        if isinstance(item, list) and len(item) > 0 and isinstance(item[0], list):
+            # It's a row of cells
+            for cell in item:
+                if cell:
+                    flat_cells.append(cell)
+        else:
+            # It's already a flat list of cells (list of lists)
+            if item:
+                flat_cells.append(item)
+
+    # Convert month string to month number if provided
+    month_num = 1
+    if month is not None:
+        if isinstance(month, int):
+            month_num = month
+        elif isinstance(month, str):
+            try:
+                month_abbr = month.strip()[:3].title()
+                month_num = datetime.strptime(month_abbr, "%b").month
+            except Exception:
+                month_map = {
+                    "Jan": 1, "Feb": 2, "Mar": 3, "Apr": 4, "May": 5, "Jun": 6,
+                    "Jul": 7, "Aug": 8, "Sep": 9, "Oct": 10, "Nov": 11, "Dec": 12
+                }
+                month_num = month_map.get(month_abbr, 1)
+
+    year_num = 2026
+    if year is not None:
+        try:
+            year_num = int(year)
+        except ValueError:
+            pass
+
+    for cell in flat_cells:
+        if not cell:
+            continue
+
+        # 1. Clean the date (first element)
+        raw_date = str(cell[0]).strip()
+        date_match = re.search(r'\d+', raw_date)
+        if not date_match:
+            continue
+        date = int(date_match.group(0))
+
+        # 2. Extract duty (second element)
+        duty = ""
+        if len(cell) > 1:
+            duty = str(cell[1]).strip()
+
+        # 3. Extract time/details and aircraft model (remaining elements)
+        time_info = ""
+        aircraft = ""
+
+        if len(cell) > 2:
+            remaining = [str(x).strip() for x in cell[2:] if str(x).strip()]
+            if remaining:
+                last_element = remaining[-1]
+                # Aircraft model regex: starts with a letter, followed by 2-3 digits, optionally a letter
+                if re.match(r'^[A-Za-z]\d{2,3}[A-Za-z]?$', last_element):
+                    aircraft = last_element
+                    time_info = "".join(remaining[:-1])
+                else:
+                    time_info = "".join(remaining)
+
+        item_dict = {
+            "date": date,
+            "duty": duty,
+            "time": time_info,
+            "aircraft": aircraft
+        }
+
+        # Merge month/year to create flight_date to match DB (YYYY-MM-DD)
+        if year is not None and month is not None:
+            item_dict["flight_date"] = f"{year_num:04d}-{month_num:02d}-{date:02d}"
+
+        parsed.append(item_dict)
+
+    # Sort the parsed roster by date
+    parsed.sort(key=lambda x: x["date"])
+    return parsed
+
 
 def main():
 
@@ -401,6 +487,9 @@ def main():
         arrays = [x for x in np.array(grid_content, dtype=object).reshape(-1) if x]
 
         print(f"Calendar grid content mapping complete.{arrays}")
+
+        parsed_result = parse_roster_cells(grid_content, top.get('year'), top.get('month'))
+        print(f"Parsed roster content: {parsed_result}")
 
     # 6. Your display block to show the result (optional)
     # final_result.show()
