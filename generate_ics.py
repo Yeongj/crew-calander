@@ -89,6 +89,8 @@ def roster_to_ics(parsed_roster):
                                dep_h, dep_m)
             dtend = datetime(flight_date.year, flight_date.month, flight_date.day,
                              arr_h, arr_m) + timedelta(days=plus_days)
+            if dtend <= dtstart:
+                dtend += timedelta(days=1)
 
             dep_port = entry.get("departure_airport", "")
             arr_port = entry.get("arrival_airport", "")
