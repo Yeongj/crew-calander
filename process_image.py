@@ -9,7 +9,7 @@ from get_flight_info import lookup_flight_info
 
 # ========= CONFIG =========
 
-IMAGE_PATH = "screenshots/example_03.jpg"
+IMAGE_PATH = "screenshots/example_02.jpg"
 
 TOP_MARGIN = 20
 BOTTOM_MARGIN = 150

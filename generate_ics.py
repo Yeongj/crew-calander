@@ -11,6 +11,22 @@ ICS_FOOTER = "END:VCALENDAR"
 
 _FLIGHT_DUTY = re.compile(r'^(?:BR\d{3,}|[A-Za-z]\d{4,})$')
 
+# July 2026 UTC offsets — DST-active for Europe (CEST +2) and Americas (PDT/EDT/CDT)
+AIRPORT_OFFSETS = {
+    "AKL": 12, "BNE": 10,
+    "NRT": 9, "HND": 9, "KIX": 9, "KMQ": 9, "FUK": 9, "CTS": 9,
+    "SDJ": 9, "MYJ": 9, "AOJ": 9, "OKA": 9, "UKB": 9, "ICN": 9, "GMP": 9, "PUS": 9,
+    "TPE": 8, "TSA": 8, "KHH": 8,
+    "HKG": 8, "MFM": 8, "PVG": 8, "SHA": 8, "PEK": 8, "CAN": 8, "HGH": 8, "TFU": 8,
+    "SIN": 8, "MNL": 8, "CRK": 8, "CEB": 8, "KUL": 8, "DPS": 8,
+    "BKK": 7, "CNX": 7, "DAD": 7, "HAN": 7, "SGN": 7, "CGK": 7, "KTI": 7,
+    "IST": 3,
+    "CDG": 2, "MUC": 2, "MXP": 2, "VIE": 2,
+    "IAD": -4, "JFK": -4, "YYZ": -4,
+    "DFW": -5, "IAH": -5, "ORD": -5,
+    "LAX": -7, "SFO": -7, "SEA": -7, "YVR": -7,
+}
+
 
 def _fmt_dt(dt):
     return dt.strftime("%Y%m%dT%H%M%S")
@@ -85,15 +101,39 @@ def roster_to_ics(parsed_roster):
                 continue
             dep_h, dep_m = dep
             arr_h, arr_m = arr
-            dtstart = datetime(flight_date.year, flight_date.month, flight_date.day,
-                               dep_h, dep_m)
-            dtend = datetime(flight_date.year, flight_date.month, flight_date.day,
-                             arr_h, arr_m) + timedelta(days=plus_days)
-            if dtend <= dtstart:
-                dtend += timedelta(days=1)
 
             dep_port = entry.get("departure_airport", "")
             arr_port = entry.get("arrival_airport", "")
+            dep_off = AIRPORT_OFFSETS.get(dep_port)
+            arr_off = AIRPORT_OFFSETS.get(arr_port)
+
+            dep_local = datetime(flight_date.year, flight_date.month, flight_date.day,
+                                 dep_h, dep_m)
+            arr_local = datetime(flight_date.year, flight_date.month, flight_date.day,
+                                 arr_h, arr_m) + timedelta(days=plus_days)
+
+            if dep_off is not None and arr_off is not None:
+                dep_utc = dep_local - timedelta(hours=dep_off)
+                arr_utc = arr_local - timedelta(hours=arr_off)
+                flight_secs = (arr_utc - dep_utc).total_seconds()
+
+                if dep_port == "TPE":
+                    dtstart = dep_local
+                    dtend = dtstart + timedelta(seconds=flight_secs)
+                elif arr_port == "TPE":
+                    dtend = arr_local
+                    dtstart = dtend - timedelta(seconds=flight_secs)
+                else:
+                    dtstart = dep_local
+                    dtend = arr_local
+                    if dtend <= dtstart:
+                        dtend += timedelta(days=1)
+            else:
+                dtstart = dep_local
+                dtend = arr_local
+                if dtend <= dtstart:
+                    dtend += timedelta(days=1)
+
             route = f" {dep_port}→{arr_port}" if dep_port and arr_port else ""
             summary = f"{duty}{route}"
 
