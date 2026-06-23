@@ -209,6 +209,41 @@ def parse_flight_info_and_store(flight_data, year, month):
     conn.commit()
     conn.close()
 
+def lookup_flight_info(flight_date, flight_number):
+    """Query the flight_schedules table for departure/arrival times and airports.
+
+    Args:
+        flight_date: Date string in 'YYYY-MM-DD' format.
+        flight_number: Flight number string in DB format (e.g., 'BR071').
+
+    Returns:
+        Dict with departure_time, arrival_time, departure_airport, arrival_airport,
+        or None if not found.
+    """
+    try:
+        dt = datetime.strptime(flight_date, "%Y-%m-%d")
+    except ValueError:
+        return None
+    table_name = f"flight_schedules_{dt.year}_{dt.month:02d}"
+    db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flight_info.db")
+    conn = sqlite3.connect(db_path)
+    cursor = conn.cursor()
+    cursor.execute(
+        f"SELECT departure_time, arrival_time, departure_airport, arrival_airport "
+        f"FROM {table_name} WHERE flight_date = ? AND flight_number = ?",
+        (flight_date, flight_number)
+    )
+    row = cursor.fetchone()
+    conn.close()
+    if row:
+        return {
+            "departure_time": row[0],
+            "arrival_time": row[1],
+            "departure_airport": row[2],
+            "arrival_airport": row[3],
+        }
+    return None
+
 def check_and_fetch_flight_info(year, month):
     db_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "flight_info.db")
     conn = sqlite3.connect(db_path)

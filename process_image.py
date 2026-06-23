@@ -4,6 +4,7 @@ from skimage import measure, filters, morphology, transform, feature
 from PIL import Image, ImageDraw
 from rapidocr import EngineType, LangDet, LangRec, ModelType, OCRVersion, RapidOCR
 from datetime import datetime
+from get_flight_info import lookup_flight_info
 
 # ========= CONFIG =========
 
@@ -408,38 +409,67 @@ def parse_roster_cells(cells_data, year=None, month=None):
             continue
         date = int(date_match.group(0))
 
-        # 2. Extract duty (second element)
-        duty = ""
-        if len(cell) > 1:
-            duty = str(cell[1]).strip()
+        # 2. Collect remaining elements (after date)
+        elements = [str(x).strip() for x in cell[1:] if str(x).strip()]
+        if not elements:
+            continue
 
-        # 3. Extract time/details and aircraft model (remaining elements)
-        time_info = ""
-        aircraft = ""
+        # 3. Check if the last element is a shared aircraft code
+        shared_aircraft = ""
+        if re.match(r'^[A-Za-z]\d{2,3}[A-Za-z]?$', elements[-1]):
+            shared_aircraft = elements.pop()
 
-        if len(cell) > 2:
-            remaining = [str(x).strip() for x in cell[2:] if str(x).strip()]
-            if remaining:
-                last_element = remaining[-1]
-                # Aircraft model regex: starts with a letter, followed by 2-3 digits, optionally a letter
-                if re.match(r'^[A-Za-z]\d{2,3}[A-Za-z]?$', last_element):
-                    aircraft = last_element
-                    time_info = "".join(remaining[:-1])
+        # 4. Merge single-digit OCR fragments into preceding element
+        merged = []
+        for el in elements:
+            if merged and el.isdigit() and len(el) == 1 and not merged[-1].isdigit():
+                merged[-1] += el
+            else:
+                merged.append(el)
+        elements = merged
+
+        # 5. Split into duty groups at each all-digit flight number
+        digit_indices = [i for i, el in enumerate(elements) if el.isdigit()]
+
+        if len(digit_indices) >= 2:
+            groups = []
+            for i, idx in enumerate(digit_indices):
+                end = digit_indices[i+1] if i + 1 < len(digit_indices) else len(elements)
+                groups.append(elements[idx:end])
+        else:
+            groups = [elements]
+
+        # 6. Process each duty group into an entry
+        for group in groups:
+            raw_duty = group[0]
+            duty = f"BR{raw_duty.zfill(3)}" if raw_duty.isdigit() else raw_duty
+
+            time_info = ""
+            aircraft = shared_aircraft or ""
+            for el in group[1:]:
+                if re.match(r'^[A-Za-z]\d{2,3}[A-Za-z]?$', el):
+                    aircraft = el
                 else:
-                    time_info = "".join(remaining)
+                    time_info += el
 
-        item_dict = {
-            "date": date,
-            "duty": duty,
-            "time": time_info,
-            "aircraft": aircraft
-        }
+            item_dict = {
+                "date": date,
+                "duty": duty,
+                "time": time_info,
+                "aircraft": aircraft,
+            }
 
-        # Merge month/year to create flight_date to match DB (YYYY-MM-DD)
-        if year is not None and month is not None:
-            item_dict["flight_date"] = f"{year_num:04d}-{month_num:02d}-{date:02d}"
+            # Merge month/year to create flight_date to match DB (YYYY-MM-DD)
+            if year is not None and month is not None:
+                item_dict["flight_date"] = f"{year_num:04d}-{month_num:02d}-{date:02d}"
 
-        parsed.append(item_dict)
+            # 7. Enrich flight duties with schedule data from DB
+            if duty.startswith("BR") and duty[2:].isdigit() and item_dict.get("flight_date"):
+                flight_info = lookup_flight_info(item_dict["flight_date"], duty)
+                if flight_info:
+                    item_dict.update(flight_info)
+
+            parsed.append(item_dict)
 
     # Sort the parsed roster by date
     parsed.sort(key=lambda x: x["date"])
@@ -483,10 +513,10 @@ def main():
         #         else:
         #             print(f"Cell [{r_idx}][{c_idx}] contains: []")
 
-        # flatten the grid content
-        arrays = [x for x in np.array(grid_content, dtype=object).reshape(-1) if x]
+        # # flatten the grid content
+        # arrays = [x for x in np.array(grid_content, dtype=object).reshape(-1) if x]
 
-        print(f"Calendar grid content mapping complete.{arrays}")
+        # print(f"Calendar grid content mapping complete.{arrays}")
 
         parsed_result = parse_roster_cells(grid_content, top.get('year'), top.get('month'))
         print(f"Parsed roster content: {parsed_result}")
