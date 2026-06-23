@@ -86,8 +86,6 @@ if uploaded_file is not None:
                 grid_content = crop_from_image_each_cell_and_ocr(table_img, calendar_grid)
 
                 parsed_roster = parse_roster_cells(grid_content, top.get('year'), top.get('month'))
-                st.subheader("Parsed Roster Details")
-                st.write(parsed_roster)
 
                 ics_content = roster_to_ics(parsed_roster)
                 if ics_content:
@@ -98,5 +96,7 @@ if uploaded_file is not None:
                         mime="text/calendar",
                         width="stretch",
                     )
+                    with st.expander("Debug: Parsed Data"):
+                        st.write(parsed_roster)
             else:
                 st.warning("Failed to detect individual calendar blocks.")

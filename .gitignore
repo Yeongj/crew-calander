@@ -9,8 +9,9 @@ wheels/
 # Virtual environments
 .venv
 
-# IDE related files
+# CLI related files
 .antigravitycli
+.opencode
 
 # Local environment variables
 .env

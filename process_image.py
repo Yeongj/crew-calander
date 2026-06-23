@@ -419,10 +419,12 @@ def parse_roster_cells(cells_data, year=None, month=None):
         if re.match(r'^[A-Za-z]\d{2,3}[A-Za-z]?$', elements[-1]):
             shared_aircraft = elements.pop()
 
-        # 4. Merge single-digit OCR fragments into preceding element
+        # 4. Merge OCR fragments into preceding time-containing element
         merged = []
         for el in elements:
-            if merged and el.isdigit() and len(el) == 1 and not merged[-1].isdigit():
+            if merged and len(el) <= 3 and ':' in merged[-1]:
+                merged[-1] += el
+            elif merged and el.isdigit() and len(el) == 1 and not merged[-1].isdigit():
                 merged[-1] += el
             else:
                 merged.append(el)
@@ -448,11 +450,18 @@ def parse_roster_cells(cells_data, year=None, month=None):
             time_info = ""
             aircraft = shared_aircraft or ""
             note_parts = []
+            time_pattern = re.compile(r'\d{1,2}:\d{2}')
+            seen_time = False
             for el in group[1:]:
                 if re.match(r'^[A-Za-z]\d{2,3}[A-Za-z]?$', el):
                     aircraft = el
                 elif re.match(r'^\([^)]+\)$', el):
                     note_parts.append(el)
+                elif time_pattern.search(el) or ':' in el:
+                    time_info += el
+                    seen_time = True
+                elif not seen_time:
+                    duty += f" {el}"
                 else:
                     time_info += el
             note = " ".join(note_parts)

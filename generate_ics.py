@@ -20,20 +20,31 @@ def _fmt_date(d):
     return d.strftime("%Y%m%d")
 
 
+def _parse_time_part(s):
+    m = re.match(r'(\d{1,2}):(\d{0,2})', s.strip())
+    if not m:
+        return None
+    h = int(m.group(1))
+    mi_str = m.group(2).ljust(2, '0')[:2]
+    mi = int(mi_str)
+    if 0 <= h <= 23 and 0 <= mi <= 59:
+        return h, mi
+    return None
+
+
 def _parse_time_range(time_str, flight_date):
     parts = time_str.split("-")
     if len(parts) != 2:
         return None, None
     start_str, end_str = parts[0].strip(), parts[1].strip()
-    try:
-        dt_start = datetime.strptime(start_str, "%H:%M")
-        dt_end = datetime.strptime(end_str, "%H:%M")
-    except ValueError:
+    start_part = _parse_time_part(start_str)
+    end_part = _parse_time_part(end_str)
+    if not start_part or not end_part:
         return None, None
     start = datetime(flight_date.year, flight_date.month, flight_date.day,
-                     dt_start.hour, dt_start.minute)
+                     start_part[0], start_part[1])
     end = datetime(flight_date.year, flight_date.month, flight_date.day,
-                   dt_end.hour, dt_end.minute)
+                   end_part[0], end_part[1])
     if end <= start:
         end += timedelta(days=1)
     return start, end
