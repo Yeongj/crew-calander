@@ -1,3 +1,4 @@
+import os
 import re
 import numpy as np
 from skimage import measure, filters, morphology, transform, feature
@@ -19,8 +20,12 @@ YEAR_PATTERN=r"\b(20\d{2})\b"
 
 # ==========================
 
+_MODELS_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "rapidocr_models")
+os.makedirs(_MODELS_DIR, exist_ok=True)
+
 engine = RapidOCR(
     params={
+        "Global.model_root_dir": _MODELS_DIR,
         "Det.lang_type": LangDet.EN,
         "Det.ocr_version": OCRVersion.PPOCRV4,
         "Det.engine_type": EngineType.ONNXRUNTIME,
