@@ -13,8 +13,8 @@ Crew members use a dedicated mobile application to view their monthly schedules.
 *   **`crew-calander` Solution:**
     1.  **Capture:** Take a screenshot of the monthly schedule in the Crew App.
     2.  **Parse:** `crew-calander` uses OCR (RapidOCR) and computer vision (scikit-image) to detect the calendar grid and extract text from each cell in the screenshot.
-    3.  **Enrich:** Fetches flight schedule data from the Taiwan TDX Transport Data API to enrich parsed flights with departure/arrival airports and times.
-    4.  **Export:** A parsed roster preview is displayed in the app, ready for calendar export.
+    3.  **Enrich:** Fetches EVA Air (`BR`) flight schedule data from the Taiwan TDX Transport Data API to enrich parsed flights with departure/arrival airports and times.
+    4.  **Export:** Download a single `.ics` file compatible with both iOS and Android calendars.
 
 ---
 
@@ -22,9 +22,11 @@ Crew members use a dedicated mobile application to view their monthly schedules.
 
 *   **Roster Screenshot Parsing:** Uses computer vision (Canny edge detection, Hough transform) to detect the calendar grid structure, then OCRs each cell individually.
 *   **Duty & Flight Recognition:**
-    *   **Flight Duties:** Parses flight numbers and aircraft codes (e.g., `B77A`, `B78N`, `A333`).
-    *   **Off Duties:** Recognizes `DO` (Day Off) and `LO` (Leave/Off-duty).
-    *   **Standby/Reserve:** Detects standby shifts like `SBE`, `SBD`, `S06`.
+    *   **Flight Duties:** Parses flight numbers and aircraft codes (e.g., `B77A`, `B78N`, `A333`); supports multi-flight days sharing one aircraft.
+    *   **Codeshare Flights:** Detects other-airline prefixes (e.g., `B7` Uni Air) and exports them as all-day events.
+    *   **Off Duties:** Recognizes `DO` (Day Off), `LO` (Leave/Off-duty), `ADO`, `AL`, `L5`.
+    *   **Standby/Reserve:** Detects standby shifts like `SCS`, `LCS`, `LHS`, `SBE`, `SBD`, `S06` with time ranges.
+    *   **Duty Qualifiers:** Combines multi-token duty codes (e.g., `Q05 SCS(TSA)`) and extracts parenthetical notes (e.g., `(DP1)`).
 *   **Flight Schedule Enrichment:** Automatically fetches EVA Air (`BR`) international flight schedules from the [TDX Transport Data API](https://tdx.transportdata.tw) and stores them in a local SQLite database for fast lookup.
 *   **Automated Monthly Updates:** APScheduler runs a background job on the 27th of each month to pre-fetch the next month's flight schedule.
 *   **Crew-Centric UI:** Streamlit-based web interface to upload screenshots, preview parsed entries, and export.
@@ -54,8 +56,9 @@ curl -LsSf https://astral.sh/uv/install.sh | sh
 
 2. Set up environment variables for the TDX API:
    ```bash
-   cp .env.example .env
-   # Edit .env and add your CLIENT_ID and CLIENT_SECRET from https://tdx.transportdata.tw
+   # Create a .env file with your TDX API credentials from https://tdx.transportdata.tw
+   echo "CLIENT_ID=your_client_id_here" > .env
+   echo "CLIENT_SECRET=your_client_secret_here" >> .env
    ```
 
 3. Sync the dependencies and virtual environment:
@@ -81,13 +84,14 @@ crew-calander/
 ├── process_image.py         # OCR & computer vision pipeline
 │                            #   - Grid detection via Canny + Hough transform
 │                            #   - Per-cell OCR via RapidOCR
-│                            #   - Roster cell parsing
+│                            #   - Roster cell parsing (multi-duty, qualifier merging)
+├── generate_ics.py          # Manual .ics generation (no external library)
 ├── get_flight_info.py       # TDX API client for flight schedule data
 │                            #   - OAuth2 authentication
 │                            #   - Paginated API fetching
 │                            #   - SQLite storage with weekday expansion
-├── cron_monthly_update.py   # Standalone cron script for monthly data refresh
-├── flight_info.db           # Local SQLite database (auto-created)
+├── cron_monthly_update.py   # Standalone cron script (alternative to APScheduler in app.py)
+├── flight_info.db           # Local SQLite database (auto-created on demand)
 ├── screenshots/             # Example roster screenshots
 ├── .env                     # TDX API credentials (not tracked)
 ├── pyproject.toml           # Project dependencies
@@ -102,18 +106,17 @@ crew-calander/
 - Parse common crew duty codes (`DO`, `LO`, `SBE`, `SBD`, `SCS`, etc.).
 - Parse flight details: Flight numbers, aircraft types.
 
-### Phase 2: Calendar Generation & Enrichment 🔄
+### Phase 2: Calendar Generation & Enrichment ✅
 - Map extracted dates to complete datetime structures.
 - Integrate with the TDX Transport Data API for EVA Air flight schedules.
 - Store flight schedules in SQLite with weekday-based expansion.
-- Generate `.ics` files using Python's `icalendar` or `ics` library.
+- Generate `.ics` files manually (no external library) with timed/all-day/standby event types.
 
-### Phase 3: Interactive Web/Desktop UI 💻
-- Build a Streamlit web interface (in progress) allowing crew members to:
-  - Upload screenshots.
-  - Preview extracted calendar entries.
-  - Edit/correct any misparsed flights or times.
-  - Click "Export to Calendar" to download the `.ics` file.
+### Phase 3: Interactive Web/Desktop UI ✅
+- Streamlit web interface allowing crew members to:
+  - Upload roster screenshots.
+  - View parsed entries in a collapsible debug view.
+  - Download a single `.ics` file compatible with iOS and Android.
 
 ### Phase 4: API Integration 🔗
 - Support direct sync with Google Calendar API.
