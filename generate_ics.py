@@ -9,6 +9,8 @@ METHOD:PUBLISH"""
 
 ICS_FOOTER = "END:VCALENDAR"
 
+_FLIGHT_DUTY = re.compile(r'^(?:BR\d{3,}|[A-Za-z]\d{4,})$')
+
 
 def _fmt_dt(dt):
     return dt.strftime("%Y%m%dT%H%M%S")
@@ -65,7 +67,7 @@ def roster_to_ics(parsed_roster):
         except ValueError:
             continue
 
-        if duty.startswith("BR") and duty[2:].isdigit() and entry.get("departure_time"):
+        if _FLIGHT_DUTY.match(duty) and entry.get("departure_time"):
             dep = _parse_departure_time(entry["departure_time"])
             arr, plus_days = _parse_arrival_time(entry["arrival_time"])
             if not dep or not arr:
@@ -83,11 +85,14 @@ def roster_to_ics(parsed_roster):
             summary = f"{duty}{route}"
 
             aircraft = entry.get("aircraft", "")
+            note = entry.get("note", "")
             desc = f"Flight {duty}"
             if aircraft:
                 desc += f" ({aircraft})"
             if route:
                 desc += f"\n{dep_port} {entry['departure_time']} → {arr_port} {entry['arrival_time']}"
+            if note:
+                desc += f"\n{note}"
 
             events.append(f"""BEGIN:VEVENT
 UID:{uid_seq:04d}@crew-calander
@@ -98,15 +103,20 @@ DESCRIPTION:{desc}
 END:VEVENT""")
             uid_seq += 1
 
-        elif duty.startswith("BR") and duty[2:].isdigit():
+        elif _FLIGHT_DUTY.match(duty):
             dtend = flight_date + timedelta(days=1)
             summary = f"Flight {duty}"
+            note = entry.get("note", "")
+            desc = summary
+            if note:
+                desc += f"\n{note}"
 
             events.append(f"""BEGIN:VEVENT
 UID:{uid_seq:04d}@crew-calander
 DTSTART;VALUE=DATE:{_fmt_date(flight_date)}
 DTEND;VALUE=DATE:{_fmt_date(dtend)}
 SUMMARY:{summary}
+DESCRIPTION:{desc}
 END:VEVENT""")
             uid_seq += 1
 
@@ -119,12 +129,17 @@ END:VEVENT""")
                 continue
             summary = f"Standby {duty}"
 
+            note = entry.get("note", "")
+            desc = f"{duty} · {t}"
+            if note:
+                desc += f"\n{note}"
+
             events.append(f"""BEGIN:VEVENT
 UID:{uid_seq:04d}@crew-calander
 DTSTART:{_fmt_dt(start)}
 DTEND:{_fmt_dt(end)}
 SUMMARY:{summary}
-DESCRIPTION:{duty} · {t}
+DESCRIPTION:{desc}
 END:VEVENT""")
             uid_seq += 1
 

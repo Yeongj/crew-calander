@@ -8,7 +8,7 @@ from get_flight_info import lookup_flight_info
 
 # ========= CONFIG =========
 
-IMAGE_PATH = "screenshots/example_05.jpg"
+IMAGE_PATH = "screenshots/example_03.jpg"
 
 TOP_MARGIN = 20
 BOTTOM_MARGIN = 150
@@ -428,13 +428,14 @@ def parse_roster_cells(cells_data, year=None, month=None):
                 merged.append(el)
         elements = merged
 
-        # 5. Split into duty groups at each all-digit flight number
-        digit_indices = [i for i, el in enumerate(elements) if el.isdigit()]
+        # 5. Split into duty groups at each flight number marker
+        _FLIGHT_MARKER = re.compile(r'^\d+$|^[A-Za-z]\d{4,}$')
+        split_indices = [i for i, el in enumerate(elements) if _FLIGHT_MARKER.match(el)]
 
-        if len(digit_indices) >= 2:
+        if len(split_indices) >= 2:
             groups = []
-            for i, idx in enumerate(digit_indices):
-                end = digit_indices[i+1] if i + 1 < len(digit_indices) else len(elements)
+            for i, idx in enumerate(split_indices):
+                end = split_indices[i+1] if i + 1 < len(split_indices) else len(elements)
                 groups.append(elements[idx:end])
         else:
             groups = [elements]
@@ -446,11 +447,15 @@ def parse_roster_cells(cells_data, year=None, month=None):
 
             time_info = ""
             aircraft = shared_aircraft or ""
+            note_parts = []
             for el in group[1:]:
                 if re.match(r'^[A-Za-z]\d{2,3}[A-Za-z]?$', el):
                     aircraft = el
+                elif re.match(r'^\([^)]+\)$', el):
+                    note_parts.append(el)
                 else:
                     time_info += el
+            note = " ".join(note_parts)
 
             item_dict = {
                 "date": date,
@@ -458,6 +463,8 @@ def parse_roster_cells(cells_data, year=None, month=None):
                 "time": time_info,
                 "aircraft": aircraft,
             }
+            if note:
+                item_dict["note"] = note
 
             # Merge month/year to create flight_date to match DB (YYYY-MM-DD)
             if year is not None and month is not None:
