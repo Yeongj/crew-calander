@@ -28,6 +28,8 @@ Crew members use a dedicated mobile application to view their monthly schedules.
     *   **Standby/Reserve:** Detects standby shifts like `SCS`, `LCS`, `LHS`, `SBE`, `SBD`, `S06` with time ranges.
     *   **Duty Qualifiers:** Combines multi-token duty codes (e.g., `Q05 SCS(TSA)`) and extracts parenthetical notes (e.g., `(DP1)`).
 *   **Flight Schedule Enrichment:** Automatically fetches EVA Air (`BR`) international flight schedules from the [TDX Transport Data API](https://tdx.transportdata.tw) and stores them in a local SQLite database for fast lookup.
+*   **Timezone-Aware Calendar Events:** Anchors all events in TPE time using a UTC offset table (57 airports). Flights departing from TPE anchor DTSTART at TPE departure time; flights arriving into TPE anchor DTEND at TPE arrival time and calculate the departure backwards — ensuring accurate flight duration in calendar blocks.
+*   **Cell Merging & Normalization:** Short OCR fragments (≤3 chars) are merged into preceding time elements; garbled times like `08:5A` are right-padded to `08:50`; parenthetical notes like `(DP1)` are extracted into the event description.
 *   **Automated Monthly Updates:** APScheduler runs a background job on the 27th of each month to pre-fetch the next month's flight schedule.
 *   **Crew-Centric UI:** Streamlit-based web interface to upload screenshots, preview parsed entries, and export.
 
@@ -86,6 +88,8 @@ crew-calander/
 │                            #   - Per-cell OCR via RapidOCR
 │                            #   - Roster cell parsing (multi-duty, qualifier merging)
 ├── generate_ics.py          # Manual .ics generation (no external library)
+│                            #   - AIRPORT_OFFSETS dict for UTC-to-local conversion
+│                            #   - TPE-anchored DTSTART / DTEND via flight duration
 ├── get_flight_info.py       # TDX API client for flight schedule data
 │                            #   - OAuth2 authentication
 │                            #   - Paginated API fetching

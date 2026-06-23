@@ -48,6 +48,13 @@ Standalone `(...)` elements matched by `^\([^)]+\)$` become the `note` field (e.
 3. `entry.get("time")` → standby VEVENT with time range
 4. `_FLIGHT_DUTY` regex: `^(?:BR\d{3,}|[A-Za-z]\d{4,})$`
 
+### Timezone anchoring (timed flights)
+All events are anchored in TPE time via a `AIRPORT_OFFSETS` dict (57 airports, July 2026 DST):
+- **TPE→\***: DTSTART = TPE departure time, DTEND = +flight_duration (from UTC)
+- **\*→TPE**: DTEND = TPE arrival time, DTSTART = −flight_duration (backwards)
+- **Non-TPE**: falls back to floating local times with `if dtend <= dtstart: dtend += 1 day`
+- Description still shows original local airport times (e.g., `LAX 12:35 → TPE 16:55+1`)
+
 ### Time parsing leniency
 `_parse_time_part` uses regex, right-pads single-digit minutes with `'0'` (OCR garbled as `"5A"` → `"5"` → `"50"`). Overnight `+1` in arrival_time handled by `timedelta(days=plus_days)`.
 
