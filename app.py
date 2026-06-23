@@ -1,7 +1,5 @@
 import streamlit as st
-import io
 from PIL import Image
-import numpy as np
 from datetime import datetime
 from process_image import (
     ocr_read_image,
@@ -13,6 +11,7 @@ from process_image import (
     parse_roster_cells
 )
 from get_flight_info import check_and_fetch_flight_info, get_flight_info, parse_flight_info_and_store
+from generate_ics import roster_to_ics
 from apscheduler.schedulers.background import BackgroundScheduler
 
 @st.cache_resource
@@ -50,17 +49,9 @@ st.write("Upload a screenshot of your monthly roster to begin.")
 uploaded_file = st.file_uploader("Choose a roster screenshot...", type=["jpg", "jpeg", "png"], accept_multiple_files=False)
 
 if uploaded_file is not None:
-    # Display the uploaded image
     image = Image.open(uploaded_file)
-    # st.image(image, caption='Uploaded Roster Screenshot', width="stretch")
-
-    options = ["Apple Calendar", "Google Calendar"]
-    selection = st.pills("Calenders", options, selection_mode="multi")
 
     if st.button("Start Processing", width="stretch"):
-        if not selection:
-            st.error("Please select at least one calendar.")
-            st.stop()
         with st.spinner("Processing image and extracting data...", width="stretch"):
             # 1. Run initial OCR to find the roster boundaries
             ocr_result = ocr_read_image(image)
@@ -98,19 +89,14 @@ if uploaded_file is not None:
                 st.subheader("Parsed Roster Details")
                 st.write(parsed_roster)
 
-                # Convert PIL image to bytes for download
-                buf = io.BytesIO()
-                table_img.save(buf, format="PNG")
-                byte_im = buf.getvalue()
-                secs = st.columns(len(selection))
-                for index, s in enumerate(selection):
-                    secs[index].download_button(
-                        label=f"Download {s}",
-                        data=byte_im,
-                        file_name="parsed_roster.png",
-                        mime="image/png",
+                ics_content = roster_to_ics(parsed_roster)
+                if ics_content:
+                    st.download_button(
+                        label="Add to Calendar",
+                        data=ics_content,
+                        file_name="crew_roster.ics",
+                        mime="text/calendar",
                         width="stretch",
-                        key=s
                     )
             else:
                 st.warning("Failed to detect individual calendar blocks.")
